@@ -431,7 +431,8 @@
           headers: parseHeaders(xhr.getAllResponseHeaders() || '')
         }
         options.url = 'responseURL' in xhr ? xhr.responseURL : options.headers.get('X-Request-URL')
-        var body = 'response' in xhr ? xhr.response : xhr.responseText
+        // titanium crashes on iOS on `xhr.response` check
+        var body = xhr.responseText; // maybe check for `responseBlob`
         resolve(new Response(body, options))
       }
 
