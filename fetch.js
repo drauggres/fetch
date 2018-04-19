@@ -435,8 +435,12 @@
         resolve(new Response(body, options))
       }
 
-      xhr.onerror = function() {
-        reject(new TypeError('Network request failed'))
+      xhr.onerror = function(e) {
+        if (e.code === -1) {
+          reject(new TypeError('Network request failed'))
+          return;
+        }
+        xhr.onload();
       }
 
       xhr.ontimeout = function() {
