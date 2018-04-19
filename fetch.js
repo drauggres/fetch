@@ -430,9 +430,10 @@
           statusText: xhr.statusText,
           headers: parseHeaders(xhr.getAllResponseHeaders() || '')
         }
-        options.url = 'responseURL' in xhr ? xhr.responseURL : options.headers.get('X-Request-URL')
-        // titanium crashes on iOS on `xhr.response` check
-        var body = xhr.responseText; // maybe check for `responseBlob`
+        // titanium crashes on iOS on `'response' in xhr`
+        var keys = Object.keys(xhr);
+        options.url = !!~keys.indexOf('responseURL') ? xhr.responseURL : options.headers.get('X-Request-URL')
+        var body = !!~keys.indexOf('response') ? xhr.response : xhr.responseText
         resolve(new Response(body, options))
       }
 
