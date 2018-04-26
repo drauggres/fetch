@@ -425,6 +425,9 @@
       var xhr = new XMLHttpRequest()
 
       xhr.onload = function() {
+        if (!xhr) {
+          return
+        }
         var options = {
           status: xhr.status,
           statusText: xhr.statusText,
@@ -434,11 +437,16 @@
         var keys = Object.keys(xhr);
         options.url = !!~keys.indexOf('responseURL') ? xhr.responseURL : options.headers.get('X-Request-URL')
         var body = !!~keys.indexOf('response') ? xhr.response : xhr.responseText
+        xhr = null
         resolve(new Response(body, options))
       }
 
       xhr.onerror = function(e) {
+        if (!xhr) {
+          return
+        }
         if (e.code === -1) {
+          xhr = null
           reject(new TypeError('Network request failed'))
           return;
         }
@@ -446,6 +454,10 @@
       }
 
       xhr.ontimeout = function() {
+        if (!xhr) {
+          return
+        }
+        xhr = null
         reject(new TypeError('Network request failed'))
       }
 
