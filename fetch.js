@@ -449,7 +449,11 @@ export function fetch(input, init) {
     var xhr = new XMLHttpRequest()
 
     function abortXhr() {
+      if (!xhr) {
+        return
+      }
       xhr.abort()
+      xhr.onabort()
     }
 
     xhr.onload = function() {
