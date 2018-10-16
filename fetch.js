@@ -466,9 +466,9 @@ export function fetch(input, init) {
         headers: parseHeaders(xhr.getAllResponseHeaders() || '')
       }
       // titanium crashes on iOS on `'response' in xhr`
-      var keys = Object.keys(xhr);
-      options.url = !!~keys.indexOf('responseURL') ? xhr.responseURL : options.headers.get('X-Request-URL')
-      var body = !!~keys.indexOf('response') ? xhr.response : xhr.responseText
+      var keys = Object.keys(xhr)
+      options.url = ~keys.indexOf('responseURL') ? xhr.responseURL : options.headers.get('X-Request-URL')
+      var body = ~keys.indexOf('response') ? xhr.response : xhr.responseText
       xhr = null
       resolve(new Response(body, options))
     }
@@ -480,9 +480,9 @@ export function fetch(input, init) {
       if (e.code === -1) {
         xhr = null
         reject(new TypeError('Network request failed'))
-        return;
+        return
       }
-      xhr.onload();
+      xhr.onload()
     }
 
     xhr.ontimeout = function() {
@@ -522,6 +522,9 @@ export function fetch(input, init) {
 
       xhr.onreadystatechange = function() {
         // DONE (success or failure)
+        if (!xhr) {
+          return
+        }
         if (xhr.readyState === 4) {
           request.signal.removeEventListener('abort', abortXhr)
         }
