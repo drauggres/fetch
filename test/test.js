@@ -1,4 +1,6 @@
 var IEorEdge = /Edge\//.test(navigator.userAgent) || /MSIE/.test(navigator.userAgent)
+var Chrome = /Chrome\//.test(navigator.userAgent) && !IEorEdge
+var Safari = /Safari\//.test(navigator.userAgent) && !IEorEdge && !Chrome
 
 var support = {
   url: (function(url) {
@@ -116,12 +118,14 @@ exercise.forEach(function(exerciseMode) {
       })
     }
 
-    var nativeChrome = /Chrome\//.test(navigator.userAgent) && !IEorEdge && exerciseMode === 'native'
-    var nativeSafari = /Safari\//.test(navigator.userAgent) && !IEorEdge && exerciseMode === 'native'
+    var nativeChrome = Chrome && exerciseMode === 'native'
+    var nativeSafari = Safari && exerciseMode === 'native'
     var nativeEdge = /Edge\//.test(navigator.userAgent) && exerciseMode === 'native'
     var firefox = navigator.userAgent.match(/Firefox\/(\d+)/)
     var brokenFF = firefox && firefox[1] <= 56 && exerciseMode === 'native'
     var polyfillFirefox = firefox && exerciseMode === 'polyfill'
+    var omitSafari =
+      Safari && exerciseMode === 'native' && navigator.userAgent.match(/Version\/(\d+\.\d+)/)[1] <= '11.1'
 
     // https://fetch.spec.whatwg.org/#concept-bodyinit-extract
     function testBodyExtract(factory) {
@@ -493,6 +497,29 @@ exercise.forEach(function(exerciseMode) {
         }
       )
 
+      test('construct with unsupported body type', function() {
+        var req = new Request('https://fetch.spec.whatwg.org/', {
+          method: 'post',
+          body: {}
+        })
+
+        assert.equal(req.headers.get('content-type'), 'text/plain;charset=UTF-8')
+        return req.text().then(function(bodyText) {
+          assert.equal(bodyText, '[object Object]')
+        })
+      })
+
+      test('construct with null body', function() {
+        var req = new Request('https://fetch.spec.whatwg.org/', {
+          method: 'post'
+        })
+
+        assert.isNull(req.headers.get('content-type'))
+        return req.text().then(function(bodyText) {
+          assert.equal(bodyText, '')
+        })
+      })
+
       test('clone GET request', function() {
         var req = new Request('https://fetch.spec.whatwg.org/', {
           headers: {'content-type': 'text/plain'}
@@ -539,6 +566,16 @@ exercise.forEach(function(exerciseMode) {
 
       testBodyExtract(function(body) {
         return new Request('', {method: 'POST', body: body})
+      })
+
+      featureDependent(test, !omitSafari, 'credentials defaults to same-origin', function() {
+        var request = new Request('')
+        assert.equal(request.credentials, 'same-origin')
+      })
+
+      test('credentials is overridable', function() {
+        var request = new Request('', {credentials: 'omit'})
+        assert.equal(request.credentials, 'omit')
       })
     })
 
@@ -632,6 +669,30 @@ exercise.forEach(function(exerciseMode) {
         })
 
         assert.equal(r.headers.get('content-type'), 'text/plain')
+      })
+
+      test('init object as first argument', function() {
+        var r = new Response({
+          status: 201,
+          headers: {
+            'Content-Type': 'text/html'
+          }
+        })
+
+        assert.equal(r.status, 200)
+        assert.equal(r.headers.get('content-type'), 'text/plain;charset=UTF-8')
+        return r.text().then(function(bodyText) {
+          assert.equal(bodyText, '[object Object]')
+        })
+      })
+
+      test('null as first argument', function() {
+        var r = new Response(null)
+
+        assert.isNull(r.headers.get('content-type'))
+        return r.text().then(function(bodyText) {
+          assert.equal(bodyText, '')
+        })
       })
     })
 
@@ -1094,13 +1155,10 @@ exercise.forEach(function(exerciseMode) {
             controller.abort()
           }, 30)
 
-          var start = new Date()
-
           return fetch('/slow?_=' + new Date().getTime(), {
             signal: controller.signal
           }).then(
             function() {
-              assert.isAtLeast(new Date() - start, 100, 'request finished too soon')
               assert.ok(false)
             },
             function(error) {
@@ -1117,11 +1175,8 @@ exercise.forEach(function(exerciseMode) {
             controller.abort()
           }, 30)
 
-          var start = new Date()
-
           return fetch(request).then(
             function() {
-              assert.isAtLeast(new Date() - start, 100, 'request finished too soon')
               assert.ok(false)
             },
             function(error) {
@@ -1347,24 +1402,6 @@ exercise.forEach(function(exerciseMode) {
         })
 
         featureDependent(suite, exerciseMode === 'native', 'omit', function() {
-          test('request credentials defaults to omit', function() {
-            var request = new Request('')
-            assert.equal(request.credentials, 'omit')
-          })
-
-          test('does not accept cookies with implicit omit credentials', function() {
-            return fetch('/cookie?name=foo&value=bar')
-              .then(function() {
-                return fetch('/cookie?name=foo', {credentials: 'same-origin'})
-              })
-              .then(function(response) {
-                return response.text()
-              })
-              .then(function(data) {
-                assert.equal(data, 'reset')
-              })
-          })
-
           test('does not accept cookies with omit credentials', function() {
             return fetch('/cookie?name=foo&value=bar', {credentials: 'omit'})
               .then(function() {
@@ -1375,19 +1412,6 @@ exercise.forEach(function(exerciseMode) {
               })
               .then(function(data) {
                 assert.equal(data, 'reset')
-              })
-          })
-
-          test('does not send cookies with implicit omit credentials', function() {
-            return fetch('/cookie?name=foo&value=bar', {credentials: 'same-origin'})
-              .then(function() {
-                return fetch('/cookie?name=foo')
-              })
-              .then(function(response) {
-                return response.text()
-              })
-              .then(function(data) {
-                assert.equal(data, '')
               })
           })
 
@@ -1406,11 +1430,6 @@ exercise.forEach(function(exerciseMode) {
         })
 
         suite('same-origin', function() {
-          test('request credentials uses inits member', function() {
-            var request = new Request('', {credentials: 'same-origin'})
-            assert.equal(request.credentials, 'same-origin')
-          })
-
           test('send cookies with same-origin credentials', function() {
             return fetch('/cookie?name=foo&value=bar', {credentials: 'same-origin'})
               .then(function() {

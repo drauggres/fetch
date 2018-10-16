@@ -5,14 +5,12 @@ web requests in the browser. This project is a polyfill that implements a subset
 of the standard [Fetch specification][], enough to make `fetch` a viable
 replacement for most uses of XMLHttpRequest in traditional web applications.
 
-This project adheres to the [Open Code of Conduct][]. By participating, you are
-expected to uphold this code.
-
 ## Table of Contents
 
 * [Read this first](#read-this-first)
 * [Installation](#installation)
 * [Usage](#usage)
+  * [Importing](#importing)
   * [HTML](#html)
   * [JSON](#json)
   * [Response metadata](#response-metadata)
@@ -29,11 +27,12 @@ expected to uphold this code.
 
 ## Read this first
 
-* If you believe you found a bug with how `fetch` behaves in Chrome or Firefox,
-  please **don't open an issue in this repository**. This project is a
-  _polyfill_, and since Chrome and Firefox both implement the `window.fetch`
-  function natively, no code from this project actually takes any effect in
-  these browsers. See [Browser support](#browser-support) for detailed
+* If you believe you found a bug with how `fetch` behaves in your browser,
+  please **don't open an issue in this repository** unless you are testing in
+  an old version of a browser that doesn't support `window.fetch` natively.
+  This project is a _polyfill_, and since all modern browsers now implement the
+  `fetch` function natively, **no code from this project** actually takes any
+  effect there. See [Browser support](#browser-support) for detailed
   information.
 
 * If you have trouble **making a request to another domain** (a different
@@ -43,11 +42,6 @@ expected to uphold this code.
   HTTP response headers, it is often nontrivial to set up or debug. CORS is
   exclusively handled by the browser's internal mechanisms which this polyfill
   cannot influence.
-
-* If you have trouble **maintaining the user's session** or [CSRF][] protection
-  through `fetch` requests, please ensure that you've read and understood the
-  [Sending cookies](#sending-cookies) section. `fetch` doesn't send cookies
-  unless you ask it to.
 
 * This project **doesn't work under Node.js environments**. It's meant for web
   browsers only. You should ensure that your application doesn't try to package
@@ -59,15 +53,42 @@ expected to uphold this code.
 
 ## Installation
 
-* `npm install whatwg-fetch --save`; or
-
-* `bower install fetch`; or
-
-* `yarn add whatwg-fetch`.
+```
+npm install whatwg-fetch --save
+```
 
 You will also need a Promise polyfill for [older browsers](http://caniuse.com/#feat=promises).
 We recommend [taylorhakes/promise-polyfill](https://github.com/taylorhakes/promise-polyfill)
 for its small size and Promises/A+ compatibility.
+
+## Usage
+
+For a more comprehensive API reference that this polyfill supports, refer to
+https://github.github.io/fetch/.
+
+### Importing
+
+Importing will automatically polyfill `window.fetch` and related APIs:
+
+```javascript
+import 'whatwg-fetch'
+
+window.fetch(...)
+```
+
+If for some reason you need to access the polyfill implementation, it is
+available via exports:
+
+```javascript
+import {fetch as fetchPolyfill} from 'whatwg-fetch'
+
+window.fetch(...)   // use native browser version
+fetchPolyfill(...)  // use polyfill implementation
+```
+
+This approach can be used to, for example, use [abort
+functionality](#aborting-requests) in browsers that implement a native but
+outdated version of fetch that doesn't support aborting.
 
 For use with webpack, add this package in the `entry` configuration option
 before your application entry point:
@@ -75,17 +96,6 @@ before your application entry point:
 ```javascript
 entry: ['whatwg-fetch', ...]
 ```
-
-For Babel and ES2015+, make sure to import the file:
-
-```javascript
-import 'whatwg-fetch'
-```
-
-## Usage
-
-For a more comprehensive API reference that this polyfill supports, refer to
-https://github.github.io/fetch/.
 
 ### HTML
 
@@ -165,18 +175,14 @@ fetch('/avatars', {
 
 ### Caveats
 
-The `fetch` specification differs from `jQuery.ajax()` in mainly two ways that
-bear keeping in mind:
-
 * The Promise returned from `fetch()` **won't reject on HTTP error status**
   even if the response is an HTTP 404 or 500. Instead, it will resolve normally,
   and it will only reject on network failure or if anything prevented the
   request from completing.
 
-* By default, `fetch` **won't send or receive any cookies** from the server,
-  resulting in unauthenticated requests if the site relies on maintaining a user
-  session. See [Sending cookies](#sending-cookies) for how to opt into cookie
-  handling.
+* For maximum browser compatibility when it comes to sending & receiving
+  cookies, always supply the `credentials: 'same-origin'` option instead of
+  relying on the default. See [Sending cookies](#sending-cookies).
 
 #### Handling HTTP error statuses
 
@@ -210,25 +216,41 @@ fetch('/users')
 
 #### Sending cookies
 
-To automatically send cookies for the current domain, the `credentials` option
-must be provided:
-
-```javascript
-fetch('/users', {
-  credentials: 'same-origin'
-})
-```
-
-The "same-origin" value makes `fetch` behave similarly to XMLHttpRequest with
-regards to cookies. Otherwise, cookies won't get sent, resulting in these
-requests not preserving the authentication session.
-
-For [CORS][] requests, use the "include" value to allow sending credentials to
-other domains:
+For [CORS][] requests, use `credentials: 'include'` to allow sending credentials
+to other domains:
 
 ```javascript
 fetch('https://example.com:1234/users', {
   credentials: 'include'
+})
+```
+
+To disable sending or receiving cookies for requests to any domain, including
+the current one, use the "omit" value:
+
+```javascript
+fetch('/users', {
+  credentials: 'omit'
+})
+```
+
+The default value for `credentials` is "same-origin".
+
+The default for `credentials` wasn't always the same, though. The following
+versions of browsers implemented an older version of the fetch specification
+where the default was "omit":
+
+* Firefox 39-60
+* Chrome 42-67
+* Safari 10.1-11.1.2
+
+If you target these browsers, it's advisable to always specify `credentials:
+'same-origin'` explicitly with all fetch requests instead of relying on the
+default:
+
+```javascript
+fetch('/users', {
+  credentials: 'same-origin'
 })
 ```
 
@@ -239,10 +261,6 @@ server is a [forbidden header name][] and therefore can't be programmatically
 read with `response.headers.get()`. Instead, it's the browser's responsibility
 to handle new cookies being set (if applicable to the current URL). Unless they
 are HTTP-only, new cookies will be available through `document.cookie`.
-
-Bear in mind that the default behavior of `fetch` is to ignore the `Set-Cookie`
-header completely. To opt into accepting cookies from the server, you must use
-the `credentials` option.
 
 #### Obtaining the Response URL
 
@@ -277,9 +295,12 @@ for these APIs to abort fetches:
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only'
 import {fetch} from 'whatwg-fetch'
 
+// use native browser implementation if it supports aborting
+const abortableFetch = ('signal' in new Request('')) ? window.fetch : fetch
+
 const controller = new AbortController()
 
-fetch('/avatars', {
+abortableFetch('/avatars', {
   signal: controller.signal
 }).catch(function(ex) {
   if (ex.name === 'AbortError') {
@@ -306,7 +327,6 @@ an issue with that browser vendor instead of this project.
 
 
   [fetch specification]: https://fetch.spec.whatwg.org
-  [open code of conduct]: http://todogroup.org/opencodeofconduct/#fetch/opensource@github.com
   [cors]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS
     "Cross-origin resource sharing"
   [csrf]: https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)_Prevention_Cheat_Sheet
